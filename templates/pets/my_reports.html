@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% block title %}My Reports — Pet Rescue{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+    <h2>My Reports</h2>
+    <a href="/pets/report/" class="btn btn-primary">+ New Report</a>
+</div>
+
+<div class="filter-bar">
+    <select id="filter-status" onchange="loadMyReports()">
+        <option value="">All Statuses</option>
+        <option value="pending">Pending</option>
+        <option value="accepted">Accepted</option>
+        <option value="rejected">Rejected</option>
+    </select>
+    <select id="filter-type" onchange="loadMyReports()">
+        <option value="">All Types</option>
+        <option value="lost">Lost</option>
+        <option value="found">Found</option>
+    </select>
+</div>
+
+<div id="reports-container">
+    <p>Loading your reports...</p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function refreshAccessToken() {
+    const refresh = localStorage.getItem('refresh_token');
+    if (!refresh) return null;
+    const res = await fetch('/users/api/token/refresh/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh })
+    });
+    if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem('access_token', data.access);
+        return data.access;
+    }
+    return null;
+}
+
+async function loadMyReports() {
+    let token = getToken();
+    if (!token) { window.location.href = '/users/login/'; return; }
+
+    let res = await fetch('/pets/api/reports/mine/', {
+        headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.status === 401) {
+        token = await refreshAccessToken();
+        if (!token) { window.location.href = '/users/login/'; return; }
+        res = await fetch('/pets/api/reports/mine/', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+    }
+
+    const reports = await res.json();
+    const container = document.getElementById('reports-container');
+
+    const statusFilter = document.getElementById('filter-status').value;
+    const typeFilter = document.getElementById('filter-type').value;
+
+    let filtered = reports;
+    if (statusFilter) filtered = filtered.filter(r => r.status === statusFilter);
+    if (typeFilter) filtered = filtered.filter(r => r.report_type === typeFilter);
+
+    if (!filtered.length) {
+        container.innerHTML = `
+            <div class="card" style="text-align:center; padding:3rem;">
+                <div style="font-size:3rem;">🐾</div>
+                <p style="margin-top:1rem; color:#666;">No reports found.</p>
+                <a href="/pets/report/" class="btn btn-primary" style="margin-top:1rem; display:inline-block;">Submit Your First Report</a>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = filtered.map(r => `
+        <div class="card" style="margin-bottom:1rem;">
+            <div style="display:flex; gap:1.5rem; align-items:flex-start;">
+
+                <!-- Image -->
+                <div style="flex-shrink:0;">
+                    ${r.image_url
+                        ? `<img src="${r.image_url}" style="width:110px; height:110px; object-fit:cover; border-radius:8px;" onerror="this.style.display='none'">`
+                        : `<div style="width:110px; height:110px; background:#f0f0f0; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:2.5rem;">🐾</div>`
+}
+                </div>
+
+                <!-- Details -->
+                <div style="flex:1;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                        <div style="display:flex; gap:0.5rem; align-items:center;">
+                            <span class="badge badge-${r.report_type}">${r.report_type.toUpperCase()}</span>
+                            <span class="badge badge-${r.status}">${r.status.toUpperCase()}</span>
+                        </div>
+                        <small style="color:#999;">Submitted: ${new Date(r.created_at).toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'})}</small>
+                    </div>
+
+                    <h3 style="margin-top:0.6rem;">
+                        ${r.pet_type.charAt(0).toUpperCase() + r.pet_type.slice(1)}
+                        ${r.breed ? `<span style="font-weight:normal; color:#666;">· ${r.breed}</span>` : ''}
+                    </h3>
+
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.3rem 1rem; margin-top:0.5rem; font-size:0.9rem; color:#555;">
+                        <p>🎨 <strong>Color:</strong> ${r.color}</p>
+                        <p>📞 <strong>Contact:</strong> ${r.contact_info}</p>
+                        <p>📍 <strong>Location:</strong> ${r.location}</p>
+                        ${r.description ? `<p>📝 <strong>Note:</strong> ${r.description}</p>` : ''}
+                    </div>
+
+                    <!-- Admin note if rejected/accepted -->
+                    ${r.admin_note ? `
+                        <div style="margin-top:0.8rem; padding:0.6rem 0.9rem; background:${r.status === 'rejected' ? '#fde8e8' : '#e8f8f0'}; border-radius:6px; font-size:0.88rem;">
+                            <strong>Admin Note:</strong> ${r.admin_note}
+                        </div>` : ''
+                    }
+
+                    <!-- Pending message -->
+                    ${r.status === 'pending' ? `
+                        <div style="margin-top:0.8rem; padding:0.6rem 0.9rem; background:#fef9e7; border-radius:6px; font-size:0.88rem; color:#7d6608;">
+                             Your report is under review. Waiting for admin review.
+                        </div>` : ''
+                    }
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+document.addEventListener('DOMContentLoaded', loadMyReports);
+</script>
+{% endblock %}

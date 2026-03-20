@@ -1,0 +1,238 @@
+{% extends 'base.html' %}
+{% block title %}Admin Dashboard — Pet Rescue{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>🛠️ Admin Dashboard</h2>
+    <div style="display:flex; align-items:center; gap:1rem;">
+        <!-- Admin notification bell -->
+        <div class="notif-wrapper">
+            <a class="notif-bell" onclick="toggleAdminNotif()" style="background:var(--primary); padding:0.5rem 0.8rem; border-radius:25px; color:white; font-size:0.9rem; font-weight:600;">
+                🔔 Notifications <span id="admin-notif-count" style="background:#e74c3c; color:white; border-radius:50%; padding:0.1rem 0.4rem; font-size:0.75rem; margin-left:0.3rem; display:none;"></span>
+            </a>
+            <div class="notif-dropdown" id="admin-notif-dropdown" style="right:0;">
+                <div class="notif-dropdown-header">New Report Submissions</div>
+                <div id="admin-notif-list"><div class="notif-item">Loading...</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <label style="font-weight:600; color:var(--text-light); font-size:0.88rem;">Filter by status:</label>
+    <select id="filter-status" onchange="loadReports()">
+        <option value="pending">Pending</option>
+        <option value="accepted">Accepted</option>
+        <option value="rejected">Rejected</option>
+    </select>
+</div>
+
+<div class="card" style="padding:0; overflow:hidden;">
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Type</th>
+                <th>Pet & Image</th>
+                <th>Location</th>
+                <th>Submitted By</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="reports-table">
+            <tr><td colspan="8" style="text-align:center; padding:2rem; color:var(--text-light);">Loading...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal">
+    <div class="modal-box">
+        <h3>📋 Review Report</h3>
+        <input type="hidden" id="modal-report-id">
+        <div class="form-group">
+            <label>Update Status</label>
+            <select id="modal-status">
+                <option value="accepted">✅ Accept</option>
+                <option value="rejected">❌ Reject</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Admin Note (optional)</label>
+            <textarea id="modal-note" rows="3" placeholder="Add a note for the user..."></textarea>
+        </div>
+        <div style="display:flex; gap:1rem; margin-top:1rem">
+            <button class="btn btn-primary" onclick="submitStatus()">Update Status</button>
+            <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const token = localStorage.getItem('access_token');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!token || (!user.is_admin_user && !user.is_staff)) {
+        window.location.replace('/pets/admin-login/');
+        return;
+    }
+    loadReports();
+    loadAdminNotifications();
+});
+
+async function loadAdminNotifications() {
+    let token = getToken();
+    let res = await fetch('/pets/api/admin/notifications/', {
+        headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.status === 401) {
+        token = await refreshAccessToken();
+        if (!token) return;
+        res = await fetch('/pets/api/admin/notifications/', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+    }
+
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const countEl = document.getElementById('admin-notif-count');
+    if (data.unread_count > 0) {
+        countEl.textContent = data.unread_count;
+        countEl.style.display = 'inline';
+    }
+
+    const listEl = document.getElementById('admin-notif-list');
+    if (!data.notifications.length) {
+        listEl.innerHTML = '<div class="notif-item">No new submissions.</div>';
+        return;
+    }
+
+    listEl.innerHTML = data.notifications.slice(0, 8).map(n => `
+        <div class="notif-item ${n.is_read ? '' : 'unread'}">
+            ${n.message}
+            <small>${new Date(n.created_at).toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'})}</small>
+        </div>
+    `).join('');
+}
+
+function toggleAdminNotif() {
+    const dropdown = document.getElementById('admin-notif-dropdown');
+    const isOpen = dropdown.style.display === 'block';
+    dropdown.style.display = isOpen ? 'none' : 'block';
+
+    if (!isOpen) {
+        const token = getToken();
+        fetch('/pets/api/admin/notifications/read/', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + token }
+        }).then(() => {
+            document.getElementById('admin-notif-count').style.display = 'none';
+        });
+    }
+}
+
+document.addEventListener('click', function(e) {
+    const wrapper = document.querySelector('.notif-wrapper');
+    if (wrapper && !wrapper.contains(e.target)) {
+        document.getElementById('admin-notif-dropdown').style.display = 'none';
+    }
+});
+
+async function loadReports() {
+    let token = getToken();
+    const status = document.getElementById('filter-status').value;
+
+    let res = await fetch(`/pets/api/admin/reports/?status=${status}`, {
+        headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.status === 401) {
+        token = await refreshAccessToken();
+        if (!token) { window.location.replace('/pets/admin-login/'); return; }
+        res = await fetch(`/pets/api/admin/reports/?status=${status}`, {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+    }
+
+    if (res.status === 403) {
+        document.getElementById('reports-table').innerHTML = '<tr><td colspan="8" style="text-align:center; color:#c0392b;">Access denied.</td></tr>';
+        return;
+    }
+
+    const reports = await res.json();
+    const tbody = document.getElementById('reports-table');
+
+    if (!reports.length) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:2rem; color:var(--text-light);">No ${status} reports found.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = reports.map(r => `
+        <tr>
+            <td style="font-weight:600; color:var(--text-light);">#${r.id}</td>
+            <td><span class="badge badge-${r.report_type}">${r.report_type}</span></td>
+            <td>
+                ${r.image_url
+                    ? `<img src="${r.image_url}" style="width:55px; height:55px; object-fit:cover; border-radius:8px; display:block; margin-bottom:0.3rem;">`
+                    : `<div style="width:55px; height:55px; background:var(--primary-light); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.5rem; margin-bottom:0.3rem;">🐾</div>`
+                }
+                <strong>${r.pet_type}</strong> ${r.breed ? '· ' + r.breed : ''}<br>
+                <small style="color:var(--text-light);">${r.color}</small>
+            </td>
+            <td>${r.location}</td>
+            <td style="font-size:0.85rem;">${r.user_email}</td>
+            <td style="font-size:0.82rem; color:var(--text-light);">${new Date(r.created_at).toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'})}</td>
+            <td><span class="badge badge-${r.status}">${r.status}</span></td>
+            <td>
+                ${r.status === 'pending'
+                    ? `<button class="btn btn-primary" style="padding:0.35rem 0.9rem; font-size:0.82rem;" onclick="openModal(${r.id})">Review</button>`
+                    : `<span style="color:var(--text-light); font-size:0.85rem;">Done</span>`}
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openModal(id) {
+    document.getElementById('modal-report-id').value = id;
+    document.getElementById('modal-note').value = '';
+    document.getElementById('modal').style.display = 'block';
+}
+
+function closeModal() {
+    document.getElementById('modal').style.display = 'none';
+}
+
+async function submitStatus() {
+    let token = getToken();
+    const id = document.getElementById('modal-report-id').value;
+    const data = {
+        status: document.getElementById('modal-status').value,
+        admin_note: document.getElementById('modal-note').value,
+    };
+
+    let res = await fetch(`/pets/api/admin/reports/${id}/status/`, {
+        method: 'PATCH',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+
+    if (res.status === 401) {
+        token = await refreshAccessToken();
+        if (!token) { window.location.replace('/pets/admin-login/'); return; }
+        res = await fetch(`/pets/api/admin/reports/${id}/status/`, {
+            method: 'PATCH',
+            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+    }
+
+    if (res.ok) { closeModal(); loadReports(); }
+}
+</script>
+{% endblock %}

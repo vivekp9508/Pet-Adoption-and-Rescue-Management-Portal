@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% block title %}Browse Pets — Pet Rescue{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>🐾 Lost & Found Pets</h2>
+    <a href="/pets/search/" class="btn btn-secondary">🔍 Search My Pet</a>
+</div>
+
+<div class="filter-bar">
+    <select id="filter-type" onchange="loadReports()">
+        <option value="">All Types</option>
+        <option value="lost">Lost</option>
+        <option value="found">Found</option>
+    </select>
+    <select id="filter-pet" onchange="loadReports()">
+        <option value="">All Animals</option>
+        <option value="dog">Dog</option>
+        <option value="cat">Cat</option>
+        <option value="bird">Bird</option>
+        <option value="other">Other</option>
+    </select>
+    <input type="text" id="filter-color" placeholder="Color..." oninput="loadReports()" style="width:130px;">
+    <input type="text" id="filter-location" placeholder="Location..." oninput="loadReports()" style="width:160px;">
+    <button class="btn btn-outline" onclick="clearFilters()" style="padding:0.4rem 1rem; font-size:0.85rem;">Clear</button>
+</div>
+
+<div id="loading" style="text-align:center; padding:2rem; color:var(--text-light);">Loading pets...</div>
+<div class="pet-grid" id="pet-grid" style="display:none"></div>
+<div id="no-pets" style="display:none">
+    <div class="card empty-state">
+        <div class="empty-icon">🐾</div>
+        <p>No pet reports found matching your filters.</p>
+        <a href="/pets/report/" class="btn btn-primary" style="margin-top:1rem; display:inline-block;">Report a Pet</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let searchTimeout;
+
+async function loadReports() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(async () => {
+        const token = getToken();
+        if (!token) { window.location.href = '/users/login/'; return; }
+
+        const type = document.getElementById('filter-type').value;
+        const petType = document.getElementById('filter-pet').value;
+        const color = document.getElementById('filter-color').value.trim();
+        const location = document.getElementById('filter-location').value.trim();
+
+        let url = '/pets/api/reports/?';
+        if (type) url += `type=${type}&`;
+        if (petType) url += `pet_type=${petType}&`;
+        if (color) url += `color=${encodeURIComponent(color)}&`;
+        if (location) url += `location=${encodeURIComponent(location)}&`;
+
+        let res = await fetch(url, {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+
+        if (res.status === 401) {
+            const newToken = await refreshAccessToken();
+            if (!newToken) { window.location.href = '/users/login/'; return; }
+            res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + newToken } });
+        }
+
+        const reports = await res.json();
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('pet-grid').style.display = 'none';
+        document.getElementById('no-pets').style.display = 'none';
+
+        if (!reports.length) {
+            document.getElementById('no-pets').style.display = 'block';
+            return;
+        }
+
+        document.getElementById('pet-grid').style.display = 'grid';
+        document.getElementById('pet-grid').innerHTML = reports.map(r => `
+            <div class="pet-card">
+                ${r.image_url
+                    ? `<img src="${r.image_url}" alt="pet" onerror="this.parentElement.innerHTML='<div class=pet-card-no-img>🐾</div>'">`
+                    : `<div class="pet-card-no-img">🐾</div>`
+                }
+                <div class="pet-card-body">
+                    <div style="display:flex; gap:0.4rem; margin-bottom:0.4rem;">
+                        <span class="badge badge-${r.report_type}">${r.report_type.toUpperCase()}</span>
+                    </div>
+                    <h3>${r.pet_type.charAt(0).toUpperCase() + r.pet_type.slice(1)} ${r.breed ? '· ' + r.breed : ''}</h3>
+                    <p>🎨 ${r.color}</p>
+                    <p>📍 ${r.location}</p>
+                    <p>📞 ${r.contact_info}</p>
+                    ${r.description ? `<p style="margin-top:0.4rem; font-size:0.85rem; color:var(--text-light);">${r.description}</p>` : ''}
+                </div>
+            </div>
+        `).join('');
+    }, 400);
+}
+
+function clearFilters() {
+    document.getElementById('filter-type').value = '';
+    document.getElementById('filter-pet').value = '';
+    document.getElementById('filter-color').value = '';
+    document.getElementById('filter-location').value = '';
+    loadReports();
+}
+
+document.addEventListener('DOMContentLoaded', loadReports);
+</script>
+{% endblock %}

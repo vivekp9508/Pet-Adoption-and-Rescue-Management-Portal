@@ -1,0 +1,45 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Pet Rescue{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=4">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/pets/list/" class="nav-brand"><span>🐾</span> Pet Rescue</a>
+        <div class="nav-links">
+            <a href="/pets/list/">Browse Pets</a>
+            <a href="/pets/search/" id="nav-search" style="display:none">🔍 Search</a>
+            <a href="/pets/report/" id="nav-report" style="display:none">+ Report</a>
+            <a href="/pets/my-reports/" id="nav-my-reports" style="display:none">My Reports</a>
+
+            <!-- Notification Bell (users) -->
+            <div class="notif-wrapper" id="nav-notif-wrapper" style="display:none">
+                <a class="notif-bell" onclick="toggleNotifDropdown()" id="nav-notif-bell">
+                    🔔
+                    <span class="notif-count" id="notif-count"></span>
+                </a>
+                <div class="notif-dropdown" id="notif-dropdown">
+                    <div class="notif-dropdown-header">🔔 Notifications</div>
+                    <div id="notif-list"><div class="notif-item">Loading...</div></div>
+                </div>
+            </div>
+
+            <span class="nav-user" id="nav-user" style="display:none"></span>
+            <a href="javascript:void(0)" id="nav-logout" style="display:none" onclick="logout()">Logout</a>
+            <a href="/users/login/" id="nav-login">Login</a>
+            <a href="/users/register/" id="nav-register">Register</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="{% static 'js/main.js' %}?v=4"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
