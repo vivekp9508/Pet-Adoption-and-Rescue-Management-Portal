@@ -2,18 +2,18 @@
 {% block title %}Admin Dashboard — Pet Rescue{% endblock %}
 
 {% block content %}
-<div class="page-header">
+<div class="page-header" style="position:relative;">
     <div>
         <h2 style="margin-bottom:0.2rem;">Admin Dashboard</h2>
         <p style="color:var(--warm-gray-2); font-size:0.88rem;">Review and manage pet reports</p>
     </div>
-    <div class="notif-wrapper">
-        <button class="btn btn-secondary" onclick="toggleAdminNotif()" style="position:relative;">
+    <div style="position:relative; display:inline-block;">
+        <button onclick="toggleAdminNotif()" style="background:var(--card-bg); border:1.5px solid var(--warm-gray-4); color:var(--dark); font-size:0.88rem; font-weight:500; padding:0.5rem 1rem; border-radius:var(--radius); cursor:pointer; font-family:var(--font-body); display:flex; align-items:center; gap:0.5rem;">
             🔔 Notifications
-            <span id="admin-notif-count" style="display:none; background:var(--danger); color:white; border-radius:99px; padding:1px 7px; font-size:0.72rem; font-weight:600; margin-left:6px;"></span>
+            <span id="admin-notif-count" style="display:none; background:var(--danger); color:white; border-radius:99px; padding:1px 7px; font-size:0.72rem; font-weight:700;"></span>
         </button>
-        <div class="notif-dropdown" id="admin-notif-dropdown">
-            <div class="notif-dropdown-header">New Submissions</div>
+        <div id="admin-notif-dropdown" style="display:none; position:absolute; top:calc(100% + 8px); right:0; width:300px; background:var(--card-bg); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); border:0.5px solid var(--border-md); z-index:200; max-height:360px; overflow-y:auto;">
+            <div style="padding:0.75rem 1rem; font-weight:600; font-size:0.85rem; color:var(--dark); border-bottom:0.5px solid var(--warm-gray-4); font-family:var(--font-display);">New Submissions</div>
             <div id="admin-notif-list"><div class="notif-item">Loading...</div></div>
         </div>
     </div>
@@ -143,8 +143,10 @@ async function loadAdminNotifications() {
 
     const countEl = document.getElementById('admin-notif-count');
     if (data.unread_count > 0) {
-        countEl.textContent = data.unread_count;
-        countEl.style.display = 'inline';
+    countEl.textContent = data.unread_count;
+    countEl.style.display = 'flex';  
+    } else {
+    countEl.style.display = 'none';
     }
 
     const listEl = document.getElementById('admin-notif-list');
@@ -164,6 +166,7 @@ function toggleAdminNotif() {
     const dropdown = document.getElementById('admin-notif-dropdown');
     const isOpen = dropdown.style.display === 'block';
     dropdown.style.display = isOpen ? 'none' : 'block';
+
     if (!isOpen) {
         const token = getToken();
         fetch('/pets/api/admin/notifications/read/', {
@@ -176,10 +179,10 @@ function toggleAdminNotif() {
 }
 
 document.addEventListener('click', function(e) {
-    const wrapper = document.querySelector('.notif-wrapper');
-    if (wrapper && !wrapper.contains(e.target)) {
-        const dd = document.getElementById('admin-notif-dropdown');
-        if (dd) dd.style.display = 'none';
+    const btn = document.querySelector('[onclick="toggleAdminNotif()"]');
+    const dropdown = document.getElementById('admin-notif-dropdown');
+    if (dropdown && btn && !btn.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.style.display = 'none';
     }
 });
 
